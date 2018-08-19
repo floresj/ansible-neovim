@@ -1,0 +1,54 @@
+---
+- hosts: "{{ target_hosts }}"
+  vars:
+    nvim_version: "0.3.1"
+    nvim_download_url: "https://github.com/neovim/neovim/archive/v{{ nvim_version }}.tar.gz"
+    nvim_install_dest: "$HOME/neovim"
+    nvim_install_dependencies:
+      - cmake 
+      - gcc 
+      - gcc-c++
+      - libtool
+      - unzip
+    nvim_install_root: false
+
+  tasks:
+    - name: "Installing nvim installation dependencies"
+      yum:
+        name: "{{ item }}"
+        state: "present"
+      loop: "{{ nvim_install_dependencies }}"
+      become: "yes"
+
+    - name: "Creating temporary directory"
+      tempfile:
+        state: "directory"
+        prefix: "neovim"
+      register: temp_dir
+      become: "{{ nvim_install_root }}"
+
+    - name: "Download NVIM source for version {{ nvim_version }}"
+      unarchive:
+        src: "{{ nvim_download_url }}"
+        dest: "{{ temp_dir.path }}"
+        remote_src: yes
+      become: "{{ nvim_install_root }}"
+
+    # If user specifies custom directory, then use extra flags
+    - name: "Run make with custom install path"
+      make:
+        chdir: "{{ temp_dir.path }}/neovim-{{ nvim_version }}"
+        params:
+          CMAKE_EXTRA_FLAGS: "-DCMAKE_INSTALL_PREFIX={{ nvim_install_dest }}"
+      become: "{{ nvim_install_root }}"
+
+    - name: "Run make install"
+      make:
+        target: "install"
+        chdir: "{{ temp_dir.path }}/neovim-{{ nvim_version }}"
+      become: "{{ nvim_install_root }}"
+
+    - name: "Removing Temp Directory {{ temp_dir.path }}"
+      file:
+        path: "{{ temp_dir.path }}"
+        state: "absent"
